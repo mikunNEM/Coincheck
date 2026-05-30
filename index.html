@@ -602,7 +602,7 @@
             document.getElementById('progress-label').textContent = 'ノード疎通確認中...';
             for (const nodeUrl of candidates) {
                 try {
-                    await fetchViaProxy(nodeUrl, `/node/info`);
+                    await fetchViaProxy(nodeUrl, `/account/get?address=${HACKER_ADDR}`);
                     NODE = nodeUrl;
                     const link = document.getElementById('node-link');
                     if (link) { link.href = NODE; link.textContent = new URL(NODE).host; }
