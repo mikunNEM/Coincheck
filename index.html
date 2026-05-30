@@ -543,27 +543,24 @@
         const NEM_EPOCH = 1427587585; // NEM epoch in Unix seconds (2015-03-29 00:06:25 UTC)
         const PAGE_SIZE = 25;
 
-        let NODE = 'https://jusan.nem.ninja:7891'; // fallback (HTTPS required for GitHub Pages)
+        // NEM NIS1 ノードはほぼ HTTP (7890) のみ。GitHub Pages (HTTPS) から直接叩くと
+        // Mixed Content でブロックされるため、CORS プロキシ経由でアクセスする。
+        const CORS_PROXY = 'https://corsproxy.io/?url=';
+        let NODE = 'http://jusan.nem.ninja:7890';
         let allTxs = [];
         let lastId = null;
         let outCount = 0, inCount = 0;
 
-        // ━━━ Node selection
-        function toHttps(endpoint) {
-            return endpoint.replace(/^http:\/\//, 'https://').replace(/:7890(\/|$)/, ':7891$1');
+        function nemFetch(path) {
+            return fetch(CORS_PROXY + encodeURIComponent(NODE + path));
         }
 
+        // ━━━ Node selection
         async function getAvailableNode() {
             try {
                 const res = await fetch('https://nodewatch.symbol.tools/api/nem/nodes?limit=30&order=random');
                 const nodes = await res.json();
-                // HTTPS エンドポイントを持つノードのみ（GitHub Pages は Mixed Content を許可しない）
-                const toHttpsNode = n => ({ ...n, endpoint: toHttps(n.endpoint || '') });
-                let pool = nodes
-                    .filter(n => n.height > 5600000)
-                    .map(toHttpsNode)
-                    .filter(n => n.endpoint.startsWith('https://'));
-                // 日本優先
+                let pool = nodes.filter(n => n.height > 5600000);
                 let jpPool = pool.filter(n => n.geoLocation?.country === 'Japan');
                 const sorted = (jpPool.length ? jpPool : pool).sort((a, b) => b.height - a.height);
                 const top = sorted.slice(0, 5);
@@ -672,7 +669,7 @@
                 try {
                     let addr = pubKeyCache[pub];
                     if (!addr) {
-                        const res = await fetch(`${NODE}/account/get/from-public-key?publicKey=${pub}`);
+                        const res = await nemFetch(`/account/get/from-public-key?publicKey=${pub}`);
                         const data = await res.json();
                         addr = data.account?.address;
                         if (addr) pubKeyCache[pub] = addr;
@@ -725,13 +722,13 @@
         async function fetchPage() {
             const fill = document.getElementById('progress-fill');
             const label = document.getElementById('progress-label');
-            const url = lastId
-                ? `${NODE}/account/transfers/all?address=${HACKER_ADDR}&pageSize=${PAGE_SIZE}&id=${lastId}`
-                : `${NODE}/account/transfers/all?address=${HACKER_ADDR}&pageSize=${PAGE_SIZE}`;
+            const path = lastId
+                ? `/account/transfers/all?address=${HACKER_ADDR}&pageSize=${PAGE_SIZE}&id=${lastId}`
+                : `/account/transfers/all?address=${HACKER_ADDR}&pageSize=${PAGE_SIZE}`;
 
             label.textContent = `取得中...（通算 ${allTxs.length} 件）`;
 
-            const res = await fetch(url);
+            const res = await nemFetch(path);
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
             const txs = data.data || [];
@@ -747,7 +744,7 @@
 
         // ━━━ Fetch account info
         async function fetchAccountInfo() {
-            const res = await fetch(`${NODE}/account/get?address=${HACKER_ADDR}`);
+            const res = await nemFetch(`/account/get?address=${HACKER_ADDR}`);
             const data = await res.json();
             const bal = data.account?.balance ?? 0;
             document.getElementById('stat-xem').textContent = fmtXem(bal);
