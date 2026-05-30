@@ -543,57 +543,43 @@
         const NEM_EPOCH = 1427587585; // NEM epoch in Unix seconds (2015-03-29 00:06:25 UTC)
         const PAGE_SIZE = 25;
 
-        // NEM NIS1 ノードはほぼ HTTP (7890) のみ。GitHub Pages (HTTPS) から直接叩くと
-        // Mixed Content でブロックされるため、CORS プロキシ経由でアクセスする。
-        const CORS_PROXIES = [
-            url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-            url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-            url => `https://thingproxy.freeboard.io/fetch/${url}`,
+        // nemnodes.org で確認済みの HTTPS (7891) ノード一覧
+        // CORS プロキシ不要、Mixed Content なし
+        const NEM_NODES = [
+            'https://arasio.tsvr.net:7891',
+            'https://mosio.tsvr.net:7891',
+            'https://norisio.tsvr.net:7891',
+            'https://sioramen.tsvr.net:7891',
+            'https://sioyakisoba.tsvr.net:7891',
+            'https://tenpisio.tsvr.net:7891',
+            'https://umasio.tsvr.net:7891',
+            'https://wasabisio.tsvr.net:7891',
+            'https://yukisio.tsvr.net:7891',
+            'https://1n.dusanjp.com:7891',
+            'https://nis1.dusanjp.com:7891',
+            'https://super-nem.love:7891',
         ];
-        let NODE = 'http://jusan.nem.ninja:7890';
+        let NODE = NEM_NODES[0];
         let allTxs = [];
         let lastId = null;
         let outCount = 0, inCount = 0;
 
-        // 指定ノードに対してプロキシ経由でリクエストし、有効な JSON が返るか確認する
-        async function fetchViaProxy(nodeUrl, path) {
-            const targetUrl = nodeUrl + path;
-            let lastError;
-            for (const makeUrl of CORS_PROXIES) {
-                try {
-                    const res = await fetch(makeUrl(targetUrl), { signal: AbortSignal.timeout(5000) });
-                    const text = await res.text();
-                    if (text.trimStart().startsWith('<')) throw new Error('HTML response');
-                    JSON.parse(text); // JSON として valid かチェック
-                    return new Response(text, { status: 200, headers: { 'Content-Type': 'application/json' } });
-                } catch (e) {
-                    lastError = e;
-                }
-            }
-            throw lastError;
+        async function nemFetch(path) {
+            const res = await fetch(NODE + path, { signal: AbortSignal.timeout(8000) });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res;
         }
 
-        function nemFetch(path) {
-            return fetchViaProxy(NODE, path);
-        }
-
-        // ━━━ Node selection
-        // NEM NIS1 は古いネットワークのため HTTPS ノードは存在しない。
-        // nodewatch も HTTP ノード 1 件のみ。既知ノードリストを順番に試す。
-        const NEM_NODES = [
-            'http://jusan.nem.ninja:7890',
-            'http://alice2.nem.ninja:7890',
-            'http://bob.nem.ninja:7890',
-            'http://go.nem.ninja:7890',
-            'http://hi.nem.ninja:7890',
-            'http://7338.work:7890',
-        ];
-
+        // ━━━ Node selection（応答するノードを先頭から探す）
         async function getAvailableNode() {
             document.getElementById('progress-label').textContent = 'ノード疎通確認中...';
-            for (const nodeUrl of NEM_NODES) {
+            // ランダム順で試す
+            const shuffled = [...NEM_NODES].sort(() => Math.random() - 0.5);
+            for (const nodeUrl of shuffled) {
                 try {
-                    await fetchViaProxy(nodeUrl, `/account/get?address=${HACKER_ADDR}`);
+                    const res = await fetch(`${nodeUrl}/account/get?address=${HACKER_ADDR}`,
+                        { signal: AbortSignal.timeout(5000) });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
                     NODE = nodeUrl;
                     const link = document.getElementById('node-link');
                     if (link) { link.href = NODE; link.textContent = new URL(NODE).host; }
