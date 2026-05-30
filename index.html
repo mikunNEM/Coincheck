@@ -577,30 +577,21 @@
             return fetchViaProxy(NODE, path);
         }
 
-        // ━━━ Node selection（実際に疎通するノードを探す）
-        const FALLBACK_NODES = [
+        // ━━━ Node selection
+        // NEM NIS1 は古いネットワークのため HTTPS ノードは存在しない。
+        // nodewatch も HTTP ノード 1 件のみ。既知ノードリストを順番に試す。
+        const NEM_NODES = [
             'http://jusan.nem.ninja:7890',
             'http://alice2.nem.ninja:7890',
             'http://bob.nem.ninja:7890',
             'http://go.nem.ninja:7890',
+            'http://hi.nem.ninja:7890',
+            'http://7338.work:7890',
         ];
 
         async function getAvailableNode() {
-            let candidates = [...FALLBACK_NODES];
-            try {
-                const res = await fetch('https://nodewatch.symbol.tools/api/nem/nodes?limit=30&order=random',
-                    { signal: AbortSignal.timeout(5000) });
-                const nodes = await res.json();
-                let pool = nodes.filter(n => n.height > 5600000 && n.endpoint?.startsWith('http'));
-                let jpPool = pool.filter(n => n.geoLocation?.country === 'Japan');
-                const sorted = (jpPool.length ? jpPool : pool).sort((a, b) => b.height - a.height);
-                candidates = [...sorted.slice(0, 8).map(n => n.endpoint.replace(/\/$/, '')), ...FALLBACK_NODES];
-            } catch (e) {
-                console.warn('nodewatch 取得失敗、フォールバックリストを使用');
-            }
-
             document.getElementById('progress-label').textContent = 'ノード疎通確認中...';
-            for (const nodeUrl of candidates) {
+            for (const nodeUrl of NEM_NODES) {
                 try {
                     await fetchViaProxy(nodeUrl, `/account/get?address=${HACKER_ADDR}`);
                     NODE = nodeUrl;
