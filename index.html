@@ -555,41 +555,64 @@
         let lastId = null;
         let outCount = 0, inCount = 0;
 
-        async function nemFetch(path) {
-            const targetUrl = NODE + path;
+        // 指定ノードに対してプロキシ経由でリクエストし、有効な JSON が返るか確認する
+        async function fetchViaProxy(nodeUrl, path) {
+            const targetUrl = nodeUrl + path;
             let lastError;
             for (const makeUrl of CORS_PROXIES) {
                 try {
-                    const res = await fetch(makeUrl(targetUrl));
+                    const res = await fetch(makeUrl(targetUrl), { signal: AbortSignal.timeout(5000) });
                     const text = await res.text();
-                    if (text.trimStart().startsWith('<')) throw new Error('proxy returned HTML');
+                    if (text.trimStart().startsWith('<')) throw new Error('HTML response');
+                    JSON.parse(text); // JSON として valid かチェック
                     return new Response(text, { status: 200, headers: { 'Content-Type': 'application/json' } });
                 } catch (e) {
                     lastError = e;
-                    console.warn('CORS プロキシ失敗、次を試します:', e.message);
                 }
             }
             throw lastError;
         }
 
-        // ━━━ Node selection
+        function nemFetch(path) {
+            return fetchViaProxy(NODE, path);
+        }
+
+        // ━━━ Node selection（実際に疎通するノードを探す）
+        const FALLBACK_NODES = [
+            'http://jusan.nem.ninja:7890',
+            'http://alice2.nem.ninja:7890',
+            'http://bob.nem.ninja:7890',
+            'http://go.nem.ninja:7890',
+        ];
+
         async function getAvailableNode() {
+            let candidates = [...FALLBACK_NODES];
             try {
-                const res = await fetch('https://nodewatch.symbol.tools/api/nem/nodes?limit=30&order=random');
+                const res = await fetch('https://nodewatch.symbol.tools/api/nem/nodes?limit=30&order=random',
+                    { signal: AbortSignal.timeout(5000) });
                 const nodes = await res.json();
-                let pool = nodes.filter(n => n.height > 5600000);
+                let pool = nodes.filter(n => n.height > 5600000 && n.endpoint?.startsWith('http'));
                 let jpPool = pool.filter(n => n.geoLocation?.country === 'Japan');
                 const sorted = (jpPool.length ? jpPool : pool).sort((a, b) => b.height - a.height);
-                const top = sorted.slice(0, 5);
-                if (top.length) {
-                    NODE = top[Math.floor(Math.random() * top.length)].endpoint.replace(/\/$/, '');
+                candidates = [...sorted.slice(0, 8).map(n => n.endpoint.replace(/\/$/, '')), ...FALLBACK_NODES];
+            } catch (e) {
+                console.warn('nodewatch 取得失敗、フォールバックリストを使用');
+            }
+
+            document.getElementById('progress-label').textContent = 'ノード疎通確認中...';
+            for (const nodeUrl of candidates) {
+                try {
+                    await fetchViaProxy(nodeUrl, `/node/info`);
+                    NODE = nodeUrl;
                     const link = document.getElementById('node-link');
                     if (link) { link.href = NODE; link.textContent = new URL(NODE).host; }
                     console.log('✅ NEM ノード:', NODE);
+                    return;
+                } catch {
+                    console.warn('ノード疎通失敗:', nodeUrl);
                 }
-            } catch (e) {
-                console.warn('ノード取得失敗、フォールバック:', NODE);
             }
+            throw new Error('利用可能な NEM ノードが見つかりませんでした');
         }
 
         // ━━━ Time
