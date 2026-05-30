@@ -543,21 +543,30 @@
         const NEM_EPOCH = 1427587585; // NEM epoch in Unix seconds (2015-03-29 00:06:25 UTC)
         const PAGE_SIZE = 25;
 
-        let NODE = 'http://jusan.nem.ninja:7890'; // fallback
+        let NODE = 'https://jusan.nem.ninja:7891'; // fallback (HTTPS required for GitHub Pages)
         let allTxs = [];
         let lastId = null;
         let outCount = 0, inCount = 0;
 
         // ━━━ Node selection
+        function toHttps(endpoint) {
+            return endpoint.replace(/^http:\/\//, 'https://').replace(/:7890(\/|$)/, ':7891$1');
+        }
+
         async function getAvailableNode() {
             try {
                 const res = await fetch('https://nodewatch.symbol.tools/api/nem/nodes?limit=30&order=random');
                 const nodes = await res.json();
-                // 日本優先、height最大
-                let pool = nodes.filter(n => n.geoLocation?.country === 'Japan' && n.height > 5600000);
-                if (!pool.length) pool = nodes.filter(n => n.height > 5600000);
-                pool.sort((a, b) => b.height - a.height);
-                const top = pool.slice(0, 5);
+                // HTTPS エンドポイントを持つノードのみ（GitHub Pages は Mixed Content を許可しない）
+                const toHttpsNode = n => ({ ...n, endpoint: toHttps(n.endpoint || '') });
+                let pool = nodes
+                    .filter(n => n.height > 5600000)
+                    .map(toHttpsNode)
+                    .filter(n => n.endpoint.startsWith('https://'));
+                // 日本優先
+                let jpPool = pool.filter(n => n.geoLocation?.country === 'Japan');
+                const sorted = (jpPool.length ? jpPool : pool).sort((a, b) => b.height - a.height);
+                const top = sorted.slice(0, 5);
                 if (top.length) {
                     NODE = top[Math.floor(Math.random() * top.length)].endpoint.replace(/\/$/, '');
                     const link = document.getElementById('node-link');
