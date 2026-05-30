@@ -545,14 +545,31 @@
 
         // NEM NIS1 ノードはほぼ HTTP (7890) のみ。GitHub Pages (HTTPS) から直接叩くと
         // Mixed Content でブロックされるため、CORS プロキシ経由でアクセスする。
-        const CORS_PROXY = 'https://corsproxy.io/?url=';
+        const CORS_PROXIES = [
+            url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+            url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+            url => `https://thingproxy.freeboard.io/fetch/${url}`,
+        ];
         let NODE = 'http://jusan.nem.ninja:7890';
         let allTxs = [];
         let lastId = null;
         let outCount = 0, inCount = 0;
 
-        function nemFetch(path) {
-            return fetch(CORS_PROXY + encodeURIComponent(NODE + path));
+        async function nemFetch(path) {
+            const targetUrl = NODE + path;
+            let lastError;
+            for (const makeUrl of CORS_PROXIES) {
+                try {
+                    const res = await fetch(makeUrl(targetUrl));
+                    const text = await res.text();
+                    if (text.trimStart().startsWith('<')) throw new Error('proxy returned HTML');
+                    return new Response(text, { status: 200, headers: { 'Content-Type': 'application/json' } });
+                } catch (e) {
+                    lastError = e;
+                    console.warn('CORS プロキシ失敗、次を試します:', e.message);
+                }
+            }
+            throw lastError;
         }
 
         // ━━━ Node selection
