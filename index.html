@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Coincheck NEM Hack Tracker — 2018.01.26</title>
+    <meta name="description" content="2018年コインチェックハッキング事件のNEMブロックチェーン上の資金移動を追跡・可視化します。" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap"
+        rel="stylesheet" />
+    <style>
+        :root {
+            --bg: #0a0c11;
+            --card: #111420;
+            --border: #1e2535;
+            --border-glow: #e03c3c55;
+            --accent: #e05252;
+            --accent2: #f07050;
+            --muted: #5a6280;
+            --text: #d0d8f0;
+            --green: #3ecf6e;
+            --yellow: #f5c842;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+        }
+
+        /* Stars */
+        #stars-canvas {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 980px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem 4rem;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            padding: 3rem 0 2.5rem;
+        }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.7rem;
+            font-family: 'Space Mono', monospace;
+            color: var(--accent);
+            background: rgba(224, 82, 82, 0.1);
+            border: 1px solid rgba(224, 82, 82, 0.3);
+            border-radius: 100px;
+            padding: 0.3rem 1rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 1.5rem;
+        }
+
+        .chip::before {
+            content: '⚠';
+            font-size: 0.9rem;
+        }
+
+        h1 {
+            font-size: clamp(1.8rem, 4vw, 2.8rem);
+            font-weight: 700;
+            line-height: 1.2;
+            background: linear-gradient(135deg, #e05252, #f07050);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            font-size: 0.95rem;
+            line-height: 1.7;
+            max-width: 600px;
+            margin: 0 auto 2rem;
+        }
+
+        /* Stats */
+        .stats {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1px;
+            background: var(--border);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            overflow: hidden;
+            margin-bottom: 2.5rem;
+        }
+
+        .stat {
+            flex: 1;
+            min-width: 120px;
+            background: var(--card);
+            padding: 1.2rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .stat-n {
+            font-family: 'Space Mono', monospace;
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .stat-n.green {
+            color: var(--green);
+        }
+
+        .stat-n.yellow {
+            color: var(--yellow);
+        }
+
+        .stat-l {
+            font-size: 0.65rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+        }
+
+        /* Hacker address card */
+        .hacker-card {
+            background: var(--card);
+            border: 1px solid rgba(224, 82, 82, 0.4);
+            border-radius: 18px;
+            padding: 1.5rem 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 0 30px rgba(224, 82, 82, 0.08);
+        }
+
+        .hacker-card h2 {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--muted);
+            margin-bottom: 0.75rem;
+        }
+
+        .hacker-addr {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--accent);
+            word-break: break-all;
+            background: rgba(224, 82, 82, 0.07);
+            border: 1px solid rgba(224, 82, 82, 0.2);
+            border-radius: 10px;
+            padding: 0.75rem 1rem;
+        }
+
+        .hacker-addr a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .hacker-addr a:hover {
+            text-decoration: underline;
+        }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .section-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--muted);
+            flex: 1;
+        }
+
+        select {
+            background: var(--card);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            font-size: 0.82rem;
+            border-radius: 10px;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+        }
+
+        /* TX list */
+        .tx-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 0.75rem;
+            transition: border-color 0.2s;
+        }
+
+        .tx-card:hover {
+            border-color: var(--border-glow);
+        }
+
+        .tx-card.outgoing {
+            border-left: 3px solid var(--accent);
+        }
+
+        .tx-card.incoming {
+            border-left: 3px solid var(--green);
+        }
+
+        .tx-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .tx-type {
+            font-size: 0.65rem;
+            font-family: 'Space Mono', monospace;
+            font-weight: 700;
+            border-radius: 100px;
+            padding: 0.15rem 0.7rem;
+            text-transform: uppercase;
+        }
+
+        .tx-type.out {
+            background: rgba(224, 82, 82, 0.15);
+            color: var(--accent);
+            border: 1px solid rgba(224, 82, 82, 0.3);
+        }
+
+        .tx-type.in {
+            background: rgba(62, 207, 110, 0.12);
+            color: var(--green);
+            border: 1px solid rgba(62, 207, 110, 0.3);
+        }
+
+        .tx-amount {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
+        .tx-amount.large {
+            color: var(--accent);
+        }
+
+        .tx-amount.small {
+            color: var(--yellow);
+        }
+
+        .tx-date {
+            font-size: 0.72rem;
+            color: var(--muted);
+            margin-left: auto;
+        }
+
+        .tx-addr-row {
+            font-size: 0.72rem;
+            color: var(--muted);
+            margin-bottom: 0.4rem;
+        }
+
+        .tx-addr {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.72rem;
+            color: #8899cc;
+        }
+
+        .tx-addr a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .tx-addr a:hover {
+            color: var(--accent);
+        }
+
+        .tx-msg {
+            font-size: 0.78rem;
+            color: #9aaccc;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.5rem 0.75rem;
+            margin-top: 0.5rem;
+            word-break: break-word;
+            white-space: pre-wrap;
+            font-style: italic;
+        }
+
+        .tx-msg-encrypted {
+            font-style: normal;
+            color: var(--muted);
+        }
+
+        .tx-msg-hex {
+            display: block;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.68rem;
+            color: #5a6280;
+            word-break: break-all;
+            margin-top: 0.3rem;
+        }
+
+        .tx-hash {
+            font-size: 0.65rem;
+            color: var(--muted);
+            font-family: 'Space Mono', monospace;
+            margin-top: 0.4rem;
+        }
+
+        .tx-hash a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .tx-hash a:hover {
+            color: var(--accent);
+        }
+
+        /* Loading */
+        #loading {
+            text-align: center;
+            padding: 4rem 0;
+        }
+
+        .spinner {
+            width: 44px;
+            height: 44px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+            margin: 0 auto 1.5rem;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        #progress-bar {
+            height: 4px;
+            background: var(--border);
+            border-radius: 100px;
+            margin: 1rem auto;
+            max-width: 280px;
+            overflow: hidden;
+        }
+
+        #progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+            width: 0;
+            transition: width 0.4s;
+            border-radius: 100px;
+        }
+
+        #progress-label {
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+
+        #error {
+            color: var(--accent);
+            text-align: center;
+            padding: 1rem;
+            display: none;
+        }
+
+        /* Load more */
+        #load-more-btn {
+            display: none;
+            width: 100%;
+            margin-top: 1rem;
+            padding: 0.9rem;
+            background: linear-gradient(135deg, rgba(224, 82, 82, 0.15), rgba(240, 112, 80, 0.15));
+            border: 1px solid rgba(224, 82, 82, 0.3);
+            color: var(--accent);
+            font-family: 'Inter', sans-serif;
+            font-size: 0.88rem;
+            font-weight: 600;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        #load-more-btn:hover {
+            background: linear-gradient(135deg, rgba(224, 82, 82, 0.25), rgba(240, 112, 80, 0.25));
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem 0 0;
+            font-size: 0.72rem;
+            color: var(--muted);
+        }
+
+        footer a {
+            color: #5580aa;
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            color: var(--accent);
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="stars-canvas"></canvas>
+    <div class="container">
+        <header>
+            <div class="chip">blockchain forensics · NEM NIS1</div>
+            <h1>Coincheck NEM Hack Tracker</h1>
+            <p class="subtitle">
+                2018年1月26日、コインチェックから約5億2300万 XEM（当時約580億円相当）が盗まれました。<br />
+                NEM ブロックチェーン上に残された資金移動の記録を追います。
+            </p>
+
+            <div class="stats">
+                <div class="stat">
+                    <span class="stat-n" id="stat-xem">—</span>
+                    <span class="stat-l">残高 (XEM)</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-n large" style="color:var(--accent)">523,000,000</span>
+                    <span class="stat-l">盗難総額 (XEM)</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-n yellow" id="stat-out">—</span>
+                    <span class="stat-l">送金TX数</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-n green" id="stat-in">—</span>
+                    <span class="stat-l">受信TX数</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-n" style="font-size:0.9rem;">2018-01-26</span>
+                    <span class="stat-l">ハッキング発生日</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="hacker-card">
+            <h2>🚨 ハッカーアドレス（メイン）</h2>
+            <div class="hacker-addr">
+                <a href="https://explorer.nemtool.com/#/s_account?account=NC4C6PSUW5CLTDT5SXAGJDQJGZNESKFK5MCN77OG"
+                    target="_blank">
+                    NC4C6PSUW5CLTDT5SXAGJDQJGZNESKFK5MCN77OG
+                </a>
+            </div>
+        </div>
+
+        <div class="controls">
+            <span class="section-label" id="tx-count-label">トランザクション一覧</span>
+            <select id="filter-select">
+                <option value="all">すべて</option>
+                <option value="outgoing">送金のみ（資金移動）</option>
+                <option value="incoming">受信のみ</option>
+            </select>
+        </div>
+
+        <div id="tx-list"></div>
+
+        <div id="loading">
+            <div class="spinner"></div>
+            <p>NEM ブロックチェーンからデータを取得中...</p>
+            <div id="progress-bar">
+                <div id="progress-fill"></div>
+            </div>
+            <p id="progress-label">ノードを選択中...</p>
+        </div>
+        <div id="error"></div>
+
+        <button id="load-more-btn">さらに読み込む</button>
+
+        <footer>
+            接続ノード: <a id="node-link" href="#" target="_blank">選択中...</a>
+            &nbsp;·&nbsp;
+            <a href="https://explorer.nemtool.com/" target="_blank">NEM Explorer</a>
+            &nbsp;·&nbsp;
+            ハッキング発生: 2018-01-26 02:57 JST
+        </footer>
+    </div>
+
+    <script>
+        // ━━━ Stars
+        const canvas = document.getElementById('stars-canvas');
+        const ctx = canvas.getContext('2d');
+        let stars = [];
+        function initStars() {
+            canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+            stars = Array.from({ length: 80 }, () => ({
+                x: Math.random() * canvas.width, y: Math.random() * canvas.height,
+                r: Math.random() * 1.2 + 0.2, a: Math.random(), da: (Math.random() - 0.5) * 0.006,
+            }));
+        }
+        function animStars() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (const s of stars) {
+                s.a = Math.max(0, Math.min(1, s.a + s.da));
+                if (s.a <= 0 || s.a >= 1) s.da *= -1;
+                ctx.globalAlpha = s.a;
+                ctx.fillStyle = '#e05252';
+                ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+            requestAnimationFrame(animStars);
+        }
+        initStars(); animStars();
+        window.addEventListener('resize', initStars);
+
+        // ━━━ Constants
+        const HACKER_ADDR = 'NC4C6PSUW5CLTDT5SXAGJDQJGZNESKFK5MCN77OG';
+        const NEM_EPOCH = 1427587585; // NEM epoch in Unix seconds (2015-03-29 00:06:25 UTC)
+        const PAGE_SIZE = 25;
+
+        let NODE = 'http://jusan.nem.ninja:7890'; // fallback
+        let allTxs = [];
+        let lastId = null;
+        let outCount = 0, inCount = 0;
+
+        // ━━━ Node selection
+        async function getAvailableNode() {
+            try {
+                const res = await fetch('https://nodewatch.symbol.tools/api/nem/nodes?limit=30&order=random');
+                const nodes = await res.json();
+                // 日本優先、height最大
+                let pool = nodes.filter(n => n.geoLocation?.country === 'Japan' && n.height > 5600000);
+                if (!pool.length) pool = nodes.filter(n => n.height > 5600000);
+                pool.sort((a, b) => b.height - a.height);
+                const top = pool.slice(0, 5);
+                if (top.length) {
+                    NODE = top[Math.floor(Math.random() * top.length)].endpoint.replace(/\/$/, '');
+                    const link = document.getElementById('node-link');
+                    if (link) { link.href = NODE; link.textContent = new URL(NODE).host; }
+                    console.log('✅ NEM ノード:', NODE);
+                }
+            } catch (e) {
+                console.warn('ノード取得失敗、フォールバック:', NODE);
+            }
+        }
+
+        // ━━━ Time
+        function nemTsToJST(nemTs) {
+            const unix = NEM_EPOCH + nemTs;
+            const d = new Date(unix * 1000);
+            return d.toLocaleString('ja-JP', {
+                timeZone: 'Asia/Tokyo',
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+        }
+
+        // ━━━ Message decode
+        function decodeMessage(payload) {
+            if (!payload || payload.length === 0) return null;
+            try {
+                const bytes = new Uint8Array(payload.match(/.{1,2}/g).map(b => parseInt(b, 16)));
+                const decoded = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+                const hasReplacement = decoded.includes('�');
+                const nonPrintable = [...decoded].filter(c => {
+                    const code = c.charCodeAt(0);
+                    return code < 32 && code !== 9 && code !== 10 && code !== 13;
+                }).length;
+                if (!hasReplacement && nonPrintable / decoded.length < 0.1 && decoded.trim().length > 0) {
+                    return { type: 'text', content: decoded.trim() };
+                }
+            } catch {}
+            return { type: 'encrypted', hex: payload };
+        }
+
+        // ━━━ Format XEM
+        function fmtXem(microXem) {
+            return (microXem / 1_000_000).toLocaleString('ja-JP', { maximumFractionDigits: 3 });
+        }
+
+        // ━━━ Render TX
+        function renderTx(tx) {
+            const t = tx.transaction;
+            const isOut = t.recipient && t.recipient !== HACKER_ADDR;
+            const dir = isOut ? 'outgoing' : 'incoming';
+            const xem = fmtXem(t.amount || 0);
+            const large = (t.amount || 0) >= 1_000_000_000_000; // >=1M XEM
+            const date = nemTsToJST(t.timeStamp);
+            const hash = tx.meta.hash.data;
+            const explorerUrl = `https://explorer.nemtool.com/#/s_tx?hash=${hash}`;
+
+            let msgHtml = '';
+            if (t.message?.payload && t.message.payload.length > 0) {
+                const msg = decodeMessage(t.message.payload);
+                if (msg?.type === 'text') {
+                    msgHtml = `<div class="tx-msg">💬 ${escHtml(msg.content)}</div>`;
+                } else if (msg?.type === 'encrypted') {
+                    msgHtml = `<div class="tx-msg tx-msg-encrypted">🔐 暗号化メッセージ<span class="tx-msg-hex">${msg.hex}</span></div>`;
+                }
+            }
+
+
+
+            const card = document.createElement('div');
+            card.className = `tx-card ${dir}`;
+            card.dataset.dir = dir;
+            card.innerHTML = `
+        <div class="tx-header">
+          <span class="tx-type ${isOut ? 'out' : 'in'}">${isOut ? '▶ 送金' : '◀ 受信'}</span>
+          <span class="tx-amount ${large ? 'large' : 'small'}">${xem} XEM</span>
+          <span class="tx-date">${date}</span>
+        </div>
+        <div class="tx-addr-row">${isOut ? '送金先' : '送信元'}:
+          <span class="tx-addr">
+            ${isOut
+                ? `<a href="https://explorer.nemtool.com/#/s_account?account=${t.recipient}" target="_blank">${t.recipient}</a>`
+                : `<span data-pubkey="${t.signer || ''}">取得中...</span>`
+            }
+          </span>
+        </div>
+        ${msgHtml}
+        <div class="tx-hash">TX: <a href="${explorerUrl}" target="_blank">${hash}</a></div>
+      `;
+            return card;
+        }
+
+        function escHtml(s) {
+            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        // ━━━ Pubkey → NEM address (via node API, cached)
+        const pubKeyCache = {};
+        async function resolveAddresses() {
+            const spans = document.querySelectorAll('[data-pubkey]');
+            for (const span of spans) {
+                const pub = span.dataset.pubkey;
+                if (!pub) { span.textContent = '不明'; continue; }
+                try {
+                    let addr = pubKeyCache[pub];
+                    if (!addr) {
+                        const res = await fetch(`${NODE}/account/get/from-public-key?publicKey=${pub}`);
+                        const data = await res.json();
+                        addr = data.account?.address;
+                        if (addr) pubKeyCache[pub] = addr;
+                    }
+                    if (addr && /^[A-Z2-7]{40}$/.test(addr)) {
+                        const a = document.createElement('a');
+                        a.href = `https://explorer.nemtool.com/#/s_account?account=${addr}`;
+                        a.target = '_blank';
+                        a.textContent = addr;
+                        span.textContent = '';
+                        span.appendChild(a);
+                    } else {
+                        span.textContent = pub.slice(0, 16) + '...';
+                    }
+                } catch {
+                    span.textContent = pub.slice(0, 16) + '...';
+                }
+                delete span.dataset.pubkey;
+                await new Promise(r => setTimeout(r, 150));
+            }
+        }
+
+        // ━━━ Append TXs
+        function appendTxs(txs) {
+            const list = document.getElementById('tx-list');
+            const filter = document.getElementById('filter-select').value;
+            for (const tx of txs) {
+                const t = tx.transaction;
+                const isOut = t.signer === 'fdeeab78d2082ca13f45af2fd7794d2daaf584cb1c290b4bd50306f1809a0f31';
+                if (isOut) outCount++; else inCount++;
+
+                const card = renderTx(tx);
+                if (filter === 'all' ||
+                    (filter === 'outgoing' && card.dataset.dir === 'outgoing') ||
+                    (filter === 'incoming' && card.dataset.dir === 'incoming')) {
+                    list.appendChild(card);
+                }
+            }
+            updateCounts();
+        }
+
+        function updateCounts() {
+            document.getElementById('stat-out').textContent = outCount.toLocaleString();
+            document.getElementById('stat-in').textContent = inCount.toLocaleString();
+            document.getElementById('tx-count-label').textContent =
+                `トランザクション ${(outCount + inCount).toLocaleString()} 件`;
+        }
+
+        // ━━━ Fetch page
+        async function fetchPage() {
+            const fill = document.getElementById('progress-fill');
+            const label = document.getElementById('progress-label');
+            const url = lastId
+                ? `${NODE}/account/transfers/all?address=${HACKER_ADDR}&pageSize=${PAGE_SIZE}&id=${lastId}`
+                : `${NODE}/account/transfers/all?address=${HACKER_ADDR}&pageSize=${PAGE_SIZE}`;
+
+            label.textContent = `取得中...（通算 ${allTxs.length} 件）`;
+
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            const txs = data.data || [];
+
+            if (txs.length > 0) {
+                lastId = txs[txs.length - 1].meta.id;
+                allTxs.push(...txs);
+                appendTxs(txs);
+                fill.style.width = Math.min(95, allTxs.length / 5) + '%';
+            }
+            return txs.length;
+        }
+
+        // ━━━ Fetch account info
+        async function fetchAccountInfo() {
+            const res = await fetch(`${NODE}/account/get?address=${HACKER_ADDR}`);
+            const data = await res.json();
+            const bal = data.account?.balance ?? 0;
+            document.getElementById('stat-xem').textContent = fmtXem(bal);
+        }
+
+        // ━━━ Main
+        async function main() {
+            const loadEl = document.getElementById('loading');
+            const fill = document.getElementById('progress-fill');
+            const label = document.getElementById('progress-label');
+            loadEl.style.display = 'block';
+
+            await getAvailableNode();
+            label.textContent = 'アカウント情報取得中...';
+
+            try {
+                await fetchAccountInfo();
+
+                // 最初の数ページを連続取得
+                for (let i = 0; i < 8; i++) {
+                    label.textContent = `トランザクション取得中... ${allTxs.length} 件`;
+                    const got = await fetchPage();
+                    if (got < PAGE_SIZE) {
+                        fill.style.width = '100%';
+                        loadEl.style.display = 'none';
+                        document.getElementById('load-more-btn').style.display = 'none';
+                        resolveAddresses();
+                        return;
+                    }
+                    await new Promise(r => setTimeout(r, 300));
+                }
+
+                fill.style.width = '100%';
+                loadEl.style.display = 'none';
+                // まだあれば「さらに読み込む」
+                document.getElementById('load-more-btn').style.display = 'block';
+                resolveAddresses();
+
+            } catch (e) {
+                document.getElementById('error').textContent = `エラー: ${e.message}`;
+                document.getElementById('error').style.display = 'block';
+                loadEl.style.display = 'none';
+            }
+        }
+
+        // ━━━ Load more
+        document.getElementById('load-more-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('load-more-btn');
+            btn.disabled = true; btn.textContent = '取得中...';
+            try {
+                for (let i = 0; i < 5; i++) {
+                    const got = await fetchPage();
+                    if (got < PAGE_SIZE) {
+                        btn.style.display = 'none';
+                        resolveAddresses();
+                        return;
+                    }
+                    await new Promise(r => setTimeout(r, 300));
+                }
+                btn.disabled = false; btn.textContent = 'さらに読み込む';
+                resolveAddresses();
+            } catch (e) {
+                btn.disabled = false; btn.textContent = 'エラー、再試行';
+            }
+        });
+
+        // ━━━ Filter
+        document.getElementById('filter-select').addEventListener('change', () => {
+            const filter = document.getElementById('filter-select').value;
+            document.querySelectorAll('.tx-card').forEach(card => {
+                const show = filter === 'all' ||
+                    (filter === 'outgoing' && card.dataset.dir === 'outgoing') ||
+                    (filter === 'incoming' && card.dataset.dir === 'incoming');
+                card.style.display = show ? 'block' : 'none';
+            });
+        });
+
+        main();
+    </script>
+</body>
+
+</html>
